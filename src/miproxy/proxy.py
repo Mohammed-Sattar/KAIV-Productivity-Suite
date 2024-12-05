@@ -10,10 +10,13 @@ import ssl
 from socket import socket
 from re import compile
 from sys import argv
+from datetime import datetime, timedelta
 
-from OpenSSL.crypto import (X509Extension, X509, dump_privatekey, dump_certificate, load_certificate, load_privatekey,
-                            PKey, TYPE_RSA, X509Req)
-from OpenSSL.SSL import FILETYPE_PEM
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
 
 __author__ = 'Nadeem Douba'
 __copyright__ = 'Copyright 2012, PyMiProxy Project'
@@ -50,75 +53,120 @@ class CertificateAuthority(object):
     def _get_serial(self):
         s = 1
         for c in filter(lambda x: x.startswith('.pymp_'), listdir(self.cache_dir)):
-            c = load_certificate(FILETYPE_PEM, open(path.sep.join([self.cache_dir, c])).read())
-            sc = c.get_serial_number()
-            if sc > s:
-                s = sc
-            del c
+            with open(path.sep.join([self.cache_dir, c]), 'rb') as f:
+                cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+                sc = cert.serial_number
+                if sc > s:
+                    s = sc
         return s
 
     def _generate_ca(self):
         # Generate key
-        self.key = PKey()
-        self.key.generate_key(TYPE_RSA, 2048)
+        self.key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+            backend=default_backend()
+        )
 
         # Generate certificate
-        self.cert = X509()
-        self.cert.set_version(3)
-        self.cert.set_serial_number(1)
-        self.cert.get_subject().CN = 'ca.mitm.com'
-        self.cert.gmtime_adj_notBefore(0)
-        self.cert.gmtime_adj_notAfter(315360000)
-        self.cert.set_issuer(self.cert.get_subject())
-        self.cert.set_pubkey(self.key)
-        self.cert.add_extensions([
-            X509Extension("basicConstraints", True, "CA:TRUE, pathlen:0"),
-            X509Extension("keyUsage", True, "keyCertSign, cRLSign"),
-            X509Extension("subjectKeyIdentifier", False, "hash", subject=self.cert),
-            ])
-        self.cert.sign(self.key, "sha1")
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, u'ca.mitm.com'),
+        ])
 
+        self.cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            self.key.public_key()
+        ).serial_number(
+            1
+        ).not_valid_before(
+            datetime.utcnow()
+        ).not_valid_after(
+            datetime.utcnow() + timedelta(days=3650)
+        ).add_extension(
+            x509.BasicConstraints(ca=True, path_length=None), critical=True
+        ).add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=True,
+                key_cert_sign=True,
+                crl_sign=True,
+                content_commitment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False
+            ), critical=True
+        ).add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(self.key.public_key()),
+            critical=False
+        ).sign(self.key, hashes.SHA256(), default_backend())
+
+        # Write to disk
         with open(self.ca_file, 'wb+') as f:
-            f.write(dump_privatekey(FILETYPE_PEM, self.key))
-            f.write(dump_certificate(FILETYPE_PEM, self.cert))
+            f.write(self.key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+            f.write(self.cert.public_bytes(serialization.Encoding.PEM))
 
     def _read_ca(self, file):
-        self.cert = load_certificate(FILETYPE_PEM, open(file).read())
-        self.key = load_privatekey(FILETYPE_PEM, open(file).read())
+        with open(file, 'rb') as f:
+            data = f.read()
+            self.key = serialization.load_pem_private_key(
+                data,
+                password=None,
+                backend=default_backend()
+            )
+            self.cert = x509.load_pem_x509_certificate(data, default_backend())
 
     def __getitem__(self, cn):
         cnp = path.sep.join([self.cache_dir, '.pymp_%s.pem' % cn])
         if not path.exists(cnp):
-            # create certificate
-            key = PKey()
-            key.generate_key(TYPE_RSA, 2048)
+            # Generate key
+            key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+                backend=default_backend()
+            )
 
             # Generate CSR
-            req = X509Req()
-            req.get_subject().CN = cn
-            req.set_pubkey(key)
-            req.sign(key, 'sha1')
+            subject = x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, cn),
+            ])
 
-            # Sign CSR
-            cert = X509()
-            cert.set_subject(req.get_subject())
-            cert.set_serial_number(self.serial)
-            cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(31536000)
-            cert.set_issuer(self.cert.get_subject())
-            cert.set_pubkey(req.get_pubkey())
-            cert.sign(self.key, 'sha1')
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                self.cert.subject
+            ).public_key(
+                key.public_key()
+            ).serial_number(
+                self._serial
+            ).not_valid_before(
+                datetime.utcnow()
+            ).not_valid_after(
+                datetime.utcnow() + timedelta(days=365)
+            ).add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(cn)]),
+                critical=False,
+            ).sign(self.key, hashes.SHA256(), default_backend())
 
+            self._serial += 1
+
+            # Save the key and certificate
             with open(cnp, 'wb+') as f:
-                f.write(dump_privatekey(FILETYPE_PEM, key))
-                f.write(dump_certificate(FILETYPE_PEM, cert))
+                f.write(key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
 
         return cnp
-
-    @property
-    def serial(self):
-        self._serial += 1
-        return self._serial
 
 
 class UnsupportedSchemeException(Exception):
@@ -127,7 +175,7 @@ class UnsupportedSchemeException(Exception):
 
 class ProxyHandler(BaseHTTPRequestHandler):
 
-    r = compile(r'http://[^/]+(/?.*)(?i)')
+    r = compile(r'(?i)http://[^/]+(?:/.*)?')
 
     def __init__(self, request, client_address, server):
         self.is_connect = False
