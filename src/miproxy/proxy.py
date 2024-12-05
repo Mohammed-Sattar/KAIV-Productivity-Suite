@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-from urlparse import urlparse, urlunparse, ParseResult
-from SocketServer import ThreadingMixIn
-from httplib import HTTPResponse
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, urlunparse, ParseResult
+from socketserver import ThreadingMixIn
+from http.client import HTTPResponse
 from tempfile import gettempdir
 from os import path, listdir
-from ssl import wrap_socket
+import ssl
 from socket import socket
 from re import compile
 from sys import argv
@@ -143,29 +143,22 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 raise UnsupportedSchemeException('Unknown scheme %s' % repr(u.scheme))
             self.hostname = u.hostname
             self.port = u.port or 80
-            self.path = urlunparse(
-                ParseResult(
-                    scheme='',
-                    netloc='',
-                    params=u.params,
-                    path=u.path or '/',
-                    query=u.query,
-                    fragment=u.fragment
-                )
-            )
 
         # Connect to destination
         self._proxy_sock = socket()
-        self._proxy_sock.settimeout(10)
         self._proxy_sock.connect((self.hostname, int(self.port)))
 
         # Wrap socket if SSL is required
         if self.is_connect:
-            self._proxy_sock = wrap_socket(self._proxy_sock)
-
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            self._proxy_sock = context.wrap_socket(self._proxy_sock, server_hostname=self.hostname)
 
     def _transition_to_ssl(self):
-        self.request = wrap_socket(self.request, server_side=True, certfile=self.server.ca[self.path.split(':')[0]])
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(certfile=self.server.ca[self.path.split(':')[0]])
+        self.request = context.wrap_socket(self.request, server_side=True)
 
 
     def do_CONNECT(self):
@@ -179,7 +172,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             #self.request.sendall('%s 200 Connection established\r\n\r\n' % self.request_version)
             self._transition_to_ssl()
-        except Exception, e:
+        except Exception as e:
             self.send_error(500, str(e))
             return
 
@@ -196,7 +189,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             try:
                 # Connect to destination
                 self._connect_to_host()
-            except Exception, e:
+            except Exception as e:
                 self.send_error(500, str(e))
                 return
             # Extract path
@@ -295,22 +288,22 @@ class AsyncMitmProxy(ThreadingMixIn, MitmProxy):
 class MitmProxyHandler(ProxyHandler):
 
     def mitm_request(self, data):
-        print '>> %s' % repr(data[:100])
+        print('>> %s' % repr(data[:100]))
         return data
 
     def mitm_response(self, data):
-        print '<< %s' % repr(data[:100])
+        print('<< %s' % repr(data[:100]))
         return data
 
 
 class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
 
         def do_request(self, data):
-            print '>> %s' % repr(data[:100])
+            print('>> %s' % repr(data[:100]))
             return data
 
         def do_response(self, data):
-            print '<< %s' % repr(data[:100])
+            print('<< %s' % repr(data[:100]))
             return data
 
 
@@ -325,4 +318,3 @@ if __name__ == '__main__':
         proxy.serve_forever()
     except KeyboardInterrupt:
         proxy.server_close()
-
