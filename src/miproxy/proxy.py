@@ -291,6 +291,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if item.startswith('do_'):
             return self.do_COMMAND
 
+    def log_message(self, format, *args):
+        # Override to provide more detailed logging
+        message = format % args
+        print(f"\n[INFO] {self.client_address[0]}:{self.client_address[1]} - {message}")
+
 
 class InterceptorPlugin(object):
 
@@ -348,23 +353,42 @@ class MitmProxyHandler(ProxyHandler):
 
 
 class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
+    def do_request(self, data):
+        try:
+            print('\n[-->] Outgoing Request:')
+            print('-' * 50)
+            decoded_data = data.decode('utf-8', errors='ignore')
+            print(f"Length: {len(data)} bytes")
+            print(decoded_data[:500])  # Show more data
+            print('-' * 50)
+        except Exception as e:
+            print(f"Error decoding request: {e}")
+        return data
 
-        def do_request(self, data):
-            print('>> %s' % repr(data[:100]))
-            return data
-
-        def do_response(self, data):
-            print('<< %s' % repr(data[:100]))
-            return data
+    def do_response(self, data):
+        try:
+            print('\n[<--] Incoming Response:')
+            print('-' * 50)
+            decoded_data = data.decode('utf-8', errors='ignore')
+            print(f"Length: {len(data)} bytes")
+            print(decoded_data[:500])  # Show more data
+            print('-' * 50)
+        except Exception as e:
+            print(f"Error decoding response: {e}")
+        return data
 
 
 def verify_environment():
-    # Check if running in conda environment
+    # When running with sudo, we're already using the correct Python interpreter
+    # so we don't need to check the environment variables
+    if os.geteuid() == 0:  # If running as root/sudo
+        return
+        
+    # These checks only apply when not running as root
     if 'CONDA_DEFAULT_ENV' not in os.environ:
         print("Error: This script must be run in a conda environment")
         sys.exit(1)
     
-    # Check if it's the correct environment
     if os.environ.get('CONDA_DEFAULT_ENV') != 'MITM_Proxy':
         print("Error: Wrong conda environment")
         print(f"Current environment: {os.environ.get('CONDA_DEFAULT_ENV')}")
@@ -389,10 +413,14 @@ def setup_transparent_proxy():
         sys.exit(1)
     
     try:
+        print("\nSetting up transparent proxy rules...")
+        
         # Flush existing rules
+        print("- Flushing existing NAT rules...")
         subprocess.run(["iptables", "-t", "nat", "-F"], check=True)
         
         # Redirect HTTP traffic (port 80)
+        print("- Setting up HTTP (port 80) redirection...")
         subprocess.run([
             "iptables", "-t", "nat", "-A", "PREROUTING",
             "-p", "tcp", "--dport", "80",
@@ -400,24 +428,29 @@ def setup_transparent_proxy():
         ], check=True)
         
         # Redirect HTTPS traffic (port 443)
+        print("- Setting up HTTPS (port 443) redirection...")
         subprocess.run([
             "iptables", "-t", "nat", "-A", "PREROUTING",
             "-p", "tcp", "--dport", "443",
             "-j", "REDIRECT", "--to-port", "8080"
         ], check=True)
+
+        # Verify rules are in place
+        print("\nVerifying iptables rules:")
+        subprocess.run(["iptables", "-t", "nat", "-L", "PREROUTING", "--line-numbers"], check=True)
         
-        print("Successfully set up transparent proxying")
+        print("\nTransparent proxy setup completed successfully")
     except subprocess.CalledProcessError as e:
-        print(f"Error setting up transparent proxy: {e}")
+        print(f"\nError setting up transparent proxy: {e}")
         sys.exit(1)
 
 def cleanup_transparent_proxy():
     try:
-        # Remove the iptables rules
+        print("\nCleaning up transparent proxy rules...")
         subprocess.run(["iptables", "-t", "nat", "-F"], check=True)
-        print("Cleaned up transparent proxy rules")
+        print("Cleaned up transparent proxy rules successfully")
     except subprocess.CalledProcessError as e:
-        print(f"Error cleaning up transparent proxy: {e}")
+        print(f"\nError cleaning up transparent proxy: {e}")
 
 
 if __name__ == '__main__':
