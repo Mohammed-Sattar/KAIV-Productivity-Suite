@@ -14,6 +14,11 @@ from datetime import datetime, timedelta
 import subprocess
 import sys
 import os
+import threading
+import socketserver
+import struct
+import dns.message
+import dns.query
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -378,6 +383,32 @@ class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
         return data
 
 
+class DNSHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        data = self.request[0]
+        socket = self.request[1]
+        
+        try:
+            # Parse the DNS query
+            query = dns.message.from_wire(data)
+            print(f"\n[DNS Query] {query.question[0].name}")
+            
+            # Forward the query to the real DNS server (e.g., 8.8.8.8)
+            response = dns.query.udp(query, "8.8.8.8")
+            
+            # Send the response back to the client
+            socket.sendto(response.to_wire(), self.client_address)
+            print(f"[DNS Response] Resolved to: {[str(rr) for rr in response.answer]}")
+            
+        except Exception as e:
+            print(f"[DNS Error] {e}")
+
+
+class ThreadedDNSServer(socketserver.ThreadingUDPServer):
+    def __init__(self, server_address):
+        super().__init__(server_address, DNSHandler)
+
+
 def verify_environment():
     # When running with sudo, we're already using the correct Python interpreter
     # so we don't need to check the environment variables
@@ -435,11 +466,25 @@ def setup_transparent_proxy():
             "-j", "REDIRECT", "--to-port", "8080"
         ], check=True)
 
+        # Redirect DNS traffic (port 53)
+        print("- Setting up DNS (port 53) redirection...")
+        subprocess.run([
+            "iptables", "-t", "nat", "-A", "PREROUTING",
+            "-p", "udp", "--dport", "53",
+            "-j", "REDIRECT", "--to-port", "5353"
+        ], check=True)
+        subprocess.run([
+            "iptables", "-t", "nat", "-A", "PREROUTING",
+            "-p", "tcp", "--dport", "53",
+            "-j", "REDIRECT", "--to-port", "5353"
+        ], check=True)
+
         # Verify rules are in place
         print("\nVerifying iptables rules:")
         subprocess.run(["iptables", "-t", "nat", "-L", "PREROUTING", "--line-numbers"], check=True)
         
         print("\nTransparent proxy setup completed successfully")
+        print("Note: DNS redirection is enabled on port 5353")
     except subprocess.CalledProcessError as e:
         print(f"\nError setting up transparent proxy: {e}")
         sys.exit(1)
@@ -464,8 +509,16 @@ if __name__ == '__main__':
     print("\nProxy server starting...")
     print("Setting up transparent proxying...")
     setup_transparent_proxy()
-    print("Listening on: localhost:8080")
-    print("All HTTP/HTTPS traffic will be automatically intercepted")
+    
+    # Start DNS server in a separate thread
+    dns_server = ThreadedDNSServer(('localhost', 5353))
+    dns_thread = threading.Thread(target=dns_server.serve_forever)
+    dns_thread.daemon = True
+    dns_thread.start()
+    
+    print("Listening on: localhost:8080 (HTTP/HTTPS)")
+    print("DNS Interception: localhost:5353")
+    print("All HTTP/HTTPS and DNS traffic will be automatically intercepted")
     print("Press Ctrl+C to exit\n")
     
     proxy.register_interceptor(DebugInterceptor)
@@ -474,4 +527,6 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\nCleaning up...")
         cleanup_transparent_proxy()
+        dns_server.shutdown()
+        dns_server.server_close()
         proxy.server_close()
