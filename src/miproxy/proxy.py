@@ -238,6 +238,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.handle_one_request()
 
 
+    def do_GET(self):
+        # Handle GET requests
+        pass
+
+    def do_POST(self):
+        # Handle POST requests
+        pass
+
     def do_COMMAND(self):
 
         # Is this an SSL tunnel?
@@ -397,36 +405,6 @@ def get_system_dns():
     return '8.8.8.8'  # Fallback to Google DNS if unable to read
 
 
-class DNSHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        print(f"[DNS Handler] Received request from {self.client_address}")  # Log incoming requests
-        data = self.request[0]
-        socket = self.request[1]
-        
-        try:
-            # Parse the DNS query
-            query = dns.message.from_wire(data)
-            print(f"\n[DNS Query] {query.question[0].name} ({query.question[0].rdtype})")
-            
-            # Forward the query to the system's DNS server
-            dns_server = get_system_dns()
-            print(f"[Forwarding to DNS Server] {dns_server}")
-            response = dns.query.udp(query, dns_server)
-            
-            # Send the response back to the client
-            socket.sendto(response.to_wire(), self.client_address)
-            print(f"[DNS Response] Resolved to: {[str(rr) for rr in response.answer]} ({len(response.answer)} answers)")
-            
-        except Exception as e:
-            print(f"[DNS Error] {e}")
-            print(f"[Raw Query Data] {data.hex()}")
-
-
-class ThreadedDNSServer(socketserver.ThreadingUDPServer):
-    def __init__(self, server_address):
-        super().__init__(server_address, DNSHandler)
-
-
 def verify_environment():
     # When running with sudo, we're already using the correct Python interpreter
     # so we don't need to check the environment variables
@@ -484,25 +462,11 @@ def setup_transparent_proxy():
             "-j", "REDIRECT", "--to-port", "8080"
         ], check=True)
 
-        # Redirect DNS traffic (port 53)
-        print("- Setting up DNS (port 53) redirection...")
-        subprocess.run([
-            "iptables", "-t", "nat", "-A", "PREROUTING",
-            "-p", "udp", "--dport", "53",
-            "-j", "REDIRECT", "--to-port", "5354"
-        ], check=True)
-        subprocess.run([
-            "iptables", "-t", "nat", "-A", "PREROUTING",
-            "-p", "tcp", "--dport", "53",
-            "-j", "REDIRECT", "--to-port", "5354"
-        ], check=True)
-
         # Verify rules are in place
         print("\nVerifying iptables rules:")
         subprocess.run(["iptables", "-t", "nat", "-L", "PREROUTING", "--line-numbers"], check=True)
         
         print("\nTransparent proxy setup completed successfully")
-        print("Note: DNS redirection is enabled on port 5354")
     except subprocess.CalledProcessError as e:
         print(f"\nError setting up transparent proxy: {e}")
         sys.exit(1)
@@ -518,33 +482,17 @@ def cleanup_transparent_proxy():
 
 if __name__ == '__main__':
     verify_environment()
-    proxy = None
-    if not argv[1:]:
-        proxy = AsyncMitmProxy()
-    else:
-        proxy = AsyncMitmProxy(ca_file=argv[1])
-
+    proxy = AsyncMitmProxy()
     print("\nProxy server starting...")
     print("Setting up transparent proxying...")
     setup_transparent_proxy()
-    
-    # Start DNS server in a separate thread
-    dns_server = ThreadedDNSServer(('localhost', 5354))
-    dns_thread = threading.Thread(target=dns_server.serve_forever)
-    dns_thread.daemon = True
-    dns_thread.start()
-    
     print("Listening on: localhost:8080 (HTTP/HTTPS)")
-    print("DNS Interception: localhost:5354")
-    print("All HTTP/HTTPS and DNS traffic will be automatically intercepted")
+    print("All HTTP/HTTPS traffic will be automatically intercepted")
     print("Press Ctrl+C to exit\n")
-    
     proxy.register_interceptor(DebugInterceptor)
     try:
         proxy.serve_forever()
     except KeyboardInterrupt:
         print("\nCleaning up...")
         cleanup_transparent_proxy()
-        dns_server.shutdown()
-        dns_server.server_close()
         proxy.server_close()
