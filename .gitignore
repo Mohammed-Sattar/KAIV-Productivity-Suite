@@ -28,3 +28,7 @@ pip-log.txt
 
 .idea
 *.iml
+
+# Certificate files
+ca.pem
+.pymp_*.pem
