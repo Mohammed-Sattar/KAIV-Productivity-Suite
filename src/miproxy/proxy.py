@@ -471,12 +471,12 @@ def setup_transparent_proxy():
         subprocess.run([
             "iptables", "-t", "nat", "-A", "PREROUTING",
             "-p", "udp", "--dport", "53",
-            "-j", "REDIRECT", "--to-port", "5353"
+            "-j", "REDIRECT", "--to-port", "5354"
         ], check=True)
         subprocess.run([
             "iptables", "-t", "nat", "-A", "PREROUTING",
             "-p", "tcp", "--dport", "53",
-            "-j", "REDIRECT", "--to-port", "5353"
+            "-j", "REDIRECT", "--to-port", "5354"
         ], check=True)
 
         # Verify rules are in place
@@ -484,7 +484,7 @@ def setup_transparent_proxy():
         subprocess.run(["iptables", "-t", "nat", "-L", "PREROUTING", "--line-numbers"], check=True)
         
         print("\nTransparent proxy setup completed successfully")
-        print("Note: DNS redirection is enabled on port 5353")
+        print("Note: DNS redirection is enabled on port 5354")
     except subprocess.CalledProcessError as e:
         print(f"\nError setting up transparent proxy: {e}")
         sys.exit(1)
@@ -511,13 +511,13 @@ if __name__ == '__main__':
     setup_transparent_proxy()
     
     # Start DNS server in a separate thread
-    dns_server = ThreadedDNSServer(('localhost', 5353))
+    dns_server = ThreadedDNSServer(('localhost', 5354))
     dns_thread = threading.Thread(target=dns_server.serve_forever)
     dns_thread.daemon = True
     dns_thread.start()
     
     print("Listening on: localhost:8080 (HTTP/HTTPS)")
-    print("DNS Interception: localhost:5353")
+    print("DNS Interception: localhost:5354")
     print("All HTTP/HTTPS and DNS traffic will be automatically intercepted")
     print("Press Ctrl+C to exit\n")
     
