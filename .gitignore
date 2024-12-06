@@ -31,4 +31,6 @@ pip-log.txt
 
 # Certificate files
 ca.pem
+cert.pem
+key.pem
 .pymp_*.pem
