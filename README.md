@@ -1,7 +1,7 @@
 # pymiproxy - Python Micro Interceptor Proxy
 
+This is a Python 3 port of the original [PyMiProxy project](https://github.com/allfro/pymiproxy) by Nadeem Douba.
 A small and sweet man-in-the-middle proxy capable of doing HTTP and HTTP over SSL.
-
 
 ## Introduction
 
@@ -15,48 +15,50 @@ data.
 
 The following modules are required:
 
-- pyOpenSSL
-
+- cryptography>=41.0.0
 
 ## Installation
 
 Just run the following command at the command prompt:
 
 ```bash
-$ sudo python setup.py install
+$ python setup.py install
 ```
 
 ## Usage
 
 The module offers a few examples in the code. In brief, pymiproxy can be run right-away by issuing the following command
-at the the command-prompt:
+at the command-prompt:
 
 ```bash
 $ python -m miproxy.proxy
 ```
 
-This will invoke pymiproxy with the ```DebugInterceptor``` plugin which simply outputs the first 100 bytes of each request
-and response. The proxy runs on port 8080 and listens on all addresses. Go ahead and give it a try.
+This will invoke pymiproxy with the `DebugInterceptor` plugin which simply outputs the first 100 bytes of each request
+and response. The proxy runs on port 8080 and listens on all addresses.
 
+To use the proxy:
+1. Start the proxy server using the command above
+2. Configure your browser to use localhost:8080 as the proxy
+3. Browse websites and watch the intercepted traffic in your terminal
+4. Use Ctrl+C to stop the proxy when done
 
 ## Extending or Implementing pymiproxy
 
 There are two ways of extending the proxy:
 
-
 - Develop and register an Interceptor plugin; or
-- Overload the ```mitm_request```, and ```mitm_response``` methods in the ```ProxyHandler``` class.
+- Overload the `mitm_request`, and `mitm_response` methods in the `ProxyHandler` class.
 
-
-The decision on which method you choose to use is entirely dependant on whether or not you wish to push the data being
+The decision on which method you choose to use is entirely dependent on whether or not you wish to push the data being
 intercepted through a set of interceptors or not.
 
 ### Interceptor Plugins
 
 There are currently two types of interceptor plugins:
 
-- ```RequestInterceptorPlugins```: executed prior to sending the request to the remote server; and
-- ```ResponseInterceptorPlugins```: executed prior to sending the response back to the client.
+- `RequestInterceptorPlugins`: executed prior to sending the request to the remote server; and
+- `ResponseInterceptorPlugins`: executed prior to sending the response back to the client.
 
 The following flow is taken by pymiproxy in this mode:
 
@@ -72,73 +74,23 @@ You can register as many plugins as you wish. However, keep in mind that plugins
 registered in. Take care in how you register your plugins if the result of one plugin is dependent on the result of
 another.
 
-The following is a simple code example of how to run the proxy with plugins:
+## Major Changes from Original Version
 
-```python
-from sys import argv
-from miproxy.proxy import RequestInterceptorPlugin, ResponseInterceptorPlugin, AsyncMitmProxy
+1. Updated for Python 3 compatibility:
+   - Modernized imports (http.server, urllib.parse, etc.)
+   - Updated exception handling syntax
+   - Fixed print statements
 
-class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
+2. Security Improvements:
+   - Replaced deprecated OpenSSL with modern cryptography library
+   - Improved certificate generation and handling
+   - Added proper SSL context configuration
 
-        def do_request(self, data):
-            print '>> %s' % repr(data[:100])
-            return data
+3. Dependencies:
+   - Removed pyOpenSSL dependency
+   - Added cryptography as the main dependency
 
-        def do_response(self, data):
-            print '<< %s' % repr(data[:100])
-            return data
-
-
-if __name__ == '__main__':
-    proxy = None
-    if not argv[1:]:
-        proxy = AsyncMitmProxy()
-    else:
-        proxy = AsyncMitmProxy(ca_file=argv[1])
-    proxy.register_interceptor(DebugInterceptor)
-    try:
-        proxy.serve_forever()
-    except KeyboardInterrupt:
-        proxy.server_close()
-```
-
-### Method Overloading
-
-The alternate approach to extending the proxy functionality is to subclass the ProxyHandler class and overload the
-```mitm_request``` and ```mitm_response``` methods. The following is a quick example:
-
-```python
-from sys import argv
-from miproxy.proxy import AsyncMitmProxy, ProxyHandler
-
-class MitmProxyHandler(ProxyHandler):
-
-    def mitm_request(self, data):
-        print '>> %s' % repr(data[:100])
-        return data
-
-    def mitm_response(self, data):
-        print '<< %s' % repr(data[:100])
-        return data
-
-
-if __name__ == '__main__':
-    proxy = None
-    if not argv[1:]:
-        proxy = AsyncMitmProxy(RequestHandlerClass=MitmProxyHandler)
-    else:
-        proxy = AsyncMitmProxy(RequestHandlerClass=MitmProxyHandler, ca_file=argv[1])
-    try:
-        proxy.serve_forever()
-    except KeyboardInterrupt:
-        proxy.server_close()
-```
-
-Note: In both cases, the methods that process the data need to return the data back to the proxy handler. Otherwise,
-you'll get an exception.
-
-## Kudos
-
-Thanks to the great documentation at python.org, GnuCitizen's PDP for the ideas, the pyOpenSSL group for making a great
-OpenSSL API.
-
+4. Other Changes:
+   - Improved error handling
+   - Better file handling with context managers
+   - Updated regex patterns
