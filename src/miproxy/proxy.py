@@ -383,25 +383,43 @@ class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
         return data
 
 
+def get_system_dns():
+    dns_servers = []
+    try:
+        with open('/etc/resolv.conf', 'r') as f:
+            for line in f:
+                if line.startswith('nameserver'):
+                    dns_servers.append(line.split()[1])
+        if dns_servers:
+            return dns_servers[0]  # Return the first DNS server
+    except Exception as e:
+        print(f"[DNS Error] Unable to read DNS settings: {e}")
+    return '8.8.8.8'  # Fallback to Google DNS if unable to read
+
+
 class DNSHandler(socketserver.BaseRequestHandler):
     def handle(self):
+        print(f"[DNS Handler] Received request from {self.client_address}")  # Log incoming requests
         data = self.request[0]
         socket = self.request[1]
         
         try:
             # Parse the DNS query
             query = dns.message.from_wire(data)
-            print(f"\n[DNS Query] {query.question[0].name}")
+            print(f"\n[DNS Query] {query.question[0].name} ({query.question[0].rdtype})")
             
-            # Forward the query to the real DNS server (e.g., 8.8.8.8)
-            response = dns.query.udp(query, "8.8.8.8")
+            # Forward the query to the system's DNS server
+            dns_server = get_system_dns()
+            print(f"[Forwarding to DNS Server] {dns_server}")
+            response = dns.query.udp(query, dns_server)
             
             # Send the response back to the client
             socket.sendto(response.to_wire(), self.client_address)
-            print(f"[DNS Response] Resolved to: {[str(rr) for rr in response.answer]}")
+            print(f"[DNS Response] Resolved to: {[str(rr) for rr in response.answer]} ({len(response.answer)} answers)")
             
         except Exception as e:
             print(f"[DNS Error] {e}")
+            print(f"[Raw Query Data] {data.hex()}")
 
 
 class ThreadedDNSServer(socketserver.ThreadingUDPServer):
