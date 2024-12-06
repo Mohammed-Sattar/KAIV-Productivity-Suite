@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, urlunparse, ParseResult
@@ -358,10 +358,34 @@ class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
             return data
 
 
+def verify_environment():
+    # Check if running in conda environment
+    if 'CONDA_DEFAULT_ENV' not in os.environ:
+        print("Error: This script must be run in a conda environment")
+        sys.exit(1)
+    
+    # Check if it's the correct environment
+    if os.environ.get('CONDA_DEFAULT_ENV') != 'MITM_Proxy':
+        print("Error: Wrong conda environment")
+        print(f"Current environment: {os.environ.get('CONDA_DEFAULT_ENV')}")
+        print("Please activate the correct environment with:")
+        print("    conda activate MITM_Proxy")
+        sys.exit(1)
+    
+    # Get the conda environment's Python path
+    conda_prefix = os.environ.get('CONDA_PREFIX')
+    if not conda_prefix:
+        print("Error: Could not determine conda environment path")
+        sys.exit(1)
+    
+    # Store the Python path for sudo usage
+    global CONDA_PYTHON_PATH
+    CONDA_PYTHON_PATH = os.path.join(conda_prefix, 'bin', 'python')
+
 def setup_transparent_proxy():
     if os.geteuid() != 0:
         print("Error: This script must be run as root to set up transparent proxying")
-        print("Please run with: sudo /home/mohammed/anaconda3/envs/MITM_Proxy/bin/python src/miproxy/proxy.py")
+        print(f"Please run with: sudo {CONDA_PYTHON_PATH} {__file__}")
         sys.exit(1)
     
     try:
@@ -397,6 +421,7 @@ def cleanup_transparent_proxy():
 
 
 if __name__ == '__main__':
+    verify_environment()
     proxy = None
     if not argv[1:]:
         proxy = AsyncMitmProxy()
