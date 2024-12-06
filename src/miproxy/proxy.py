@@ -11,6 +11,9 @@ from socket import socket
 from re import compile
 from sys import argv
 from datetime import datetime, timedelta
+import subprocess
+import sys
+import os
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -355,14 +358,62 @@ class DebugInterceptor(RequestInterceptorPlugin, ResponseInterceptorPlugin):
             return data
 
 
+def setup_transparent_proxy():
+    if os.geteuid() != 0:
+        print("Error: This script must be run as root to set up transparent proxying")
+        print("Please run with: sudo /home/mohammed/anaconda3/envs/MITM_Proxy/bin/python src/miproxy/proxy.py")
+        sys.exit(1)
+    
+    try:
+        # Flush existing rules
+        subprocess.run(["iptables", "-t", "nat", "-F"], check=True)
+        
+        # Redirect HTTP traffic (port 80)
+        subprocess.run([
+            "iptables", "-t", "nat", "-A", "PREROUTING",
+            "-p", "tcp", "--dport", "80",
+            "-j", "REDIRECT", "--to-port", "8080"
+        ], check=True)
+        
+        # Redirect HTTPS traffic (port 443)
+        subprocess.run([
+            "iptables", "-t", "nat", "-A", "PREROUTING",
+            "-p", "tcp", "--dport", "443",
+            "-j", "REDIRECT", "--to-port", "8080"
+        ], check=True)
+        
+        print("Successfully set up transparent proxying")
+    except subprocess.CalledProcessError as e:
+        print(f"Error setting up transparent proxy: {e}")
+        sys.exit(1)
+
+def cleanup_transparent_proxy():
+    try:
+        # Remove the iptables rules
+        subprocess.run(["iptables", "-t", "nat", "-F"], check=True)
+        print("Cleaned up transparent proxy rules")
+    except subprocess.CalledProcessError as e:
+        print(f"Error cleaning up transparent proxy: {e}")
+
+
 if __name__ == '__main__':
     proxy = None
     if not argv[1:]:
         proxy = AsyncMitmProxy()
     else:
         proxy = AsyncMitmProxy(ca_file=argv[1])
+
+    print("\nProxy server starting...")
+    print("Setting up transparent proxying...")
+    setup_transparent_proxy()
+    print("Listening on: localhost:8080")
+    print("All HTTP/HTTPS traffic will be automatically intercepted")
+    print("Press Ctrl+C to exit\n")
+    
     proxy.register_interceptor(DebugInterceptor)
     try:
         proxy.serve_forever()
     except KeyboardInterrupt:
+        print("\nCleaning up...")
+        cleanup_transparent_proxy()
         proxy.server_close()
