@@ -44,7 +44,7 @@ def run(server_class=http.server.HTTPServer, handler_class=Proxy, port=8080):
     setup_iptables()
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
-    httpd.socket = ssl.wrap_socket(httpd.socket, certfile='path/to/cert.pem', keyfile='path/to/key.pem', server_side=True)
+    httpd.socket = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH).wrap_socket(httpd.socket, server_side=True, certfile='path/to/cert.pem', keyfile='path/to/key.pem')
     logging.info(f'Starting proxy on port {port}')
     httpd.serve_forever()
 
