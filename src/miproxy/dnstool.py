@@ -1,6 +1,6 @@
 from dnslib import DNSRecord, RR, QTYPE, A
 from dnslib.server import DNSServer
-import time
+import socket
 
 # Define a set of blocked domains
 BLOCKED_DOMAINS = {
@@ -11,6 +11,10 @@ BLOCKED_DOMAINS = {
 }
 
 class BlockerResolver:
+    def __init__(self, upstream_dns="8.8.8.8", upstream_port=53):
+        self.upstream_dns = upstream_dns
+        self.upstream_port = upstream_port
+
     def resolve(self, request, handler):
         # Parse the request
         qname = str(request.q.qname).rstrip(".")
@@ -23,21 +27,29 @@ class BlockerResolver:
             reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("127.0.0.1")))
             return reply
 
-        # If not blocked, forward the query (e.g., to a public DNS server)
-        # Placeholder for forwarding logic, if needed
-        reply = request.reply()
-        reply.header.rcode = 3  # NXDOMAIN (Non-existent domain)
-        return reply
+        # Forward the query to the upstream DNS server
+        try:
+            print(f"Forwarding: {qname}")
+            upstream_request = request.pack()
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.sendto(upstream_request, (self.upstream_dns, self.upstream_port))
+                upstream_response, _ = sock.recvfrom(512)  # 512 bytes is the standard DNS message size
+                return DNSRecord.parse(upstream_response)
+        except Exception as e:
+            print(f"Error forwarding query: {e}")
+            reply = request.reply()
+            reply.header.rcode = 2  # Server failure
+            return reply
 
 # Set up the DNS server
 resolver = BlockerResolver()
-server = DNSServer(resolver, port=53, address="127.0.0.1", tcp=True)
+server = DNSServer(resolver, port=53, address="127.0.0.1")
 
 print("Starting DNS Blocker...")
 try:
     server.start_thread()
     while True:
-        time.sleep(1)
+        pass  # Keep the script running
 except KeyboardInterrupt:
     print("\nStopping DNS Blocker...")
     server.stop()
