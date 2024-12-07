@@ -3,14 +3,6 @@ from dnslib.server import DNSServer
 import socket
 import re
 
-# Define a set of blocked domains
-BLOCKED_DOMAINS = {
-    "novafork.com",
-    "google.com",
-    "you.com",
-    "huggingface.com"
-}
-
 # Define your blocklist with regex patterns and direct domains
 regex_patterns = [r"^.*\.google\.com$"]  # Regex patterns start with ^
 direct_domains = {"novafork.com", "you.com", "huggingface.co"}  # Direct domain matches
