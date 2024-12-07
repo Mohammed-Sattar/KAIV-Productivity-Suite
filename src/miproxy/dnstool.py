@@ -12,7 +12,7 @@ BLOCKED_DOMAINS = {
 }
 
 # Define your blocklist with regex patterns
-blocklist_regex = [r"^.*\.google\.com$", r"^.*\.example\.com$"]  # example regex to block all google subdomains
+blocklist_regex = [r"^.*\.google\.com$", "novafork.com", "you.com", "huggingface.co"]  # example regex to block all google subdomains
 
 class BlockerResolver:
     def __init__(self, upstream_dns="8.8.8.8", upstream_port=53):
@@ -28,10 +28,9 @@ class BlockerResolver:
         for pattern in blocklist_regex:
             if re.match(pattern, qname):
                 print(f"Blocked: {qname}")
-                reply = DNSRecord().add_answer(*request.q.get_q())
-                reply.add_answer((qname, A("0.0.0.0")))  # Block by returning a fake IP
-                handler.send(reply)
-                return
+                reply = request.reply()
+                reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
+                return reply    
 
         # Forward the query to the upstream DNS server
         try:
