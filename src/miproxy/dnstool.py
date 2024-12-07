@@ -11,8 +11,9 @@ BLOCKED_DOMAINS = {
     "huggingface.com"
 }
 
-# Define your blocklist with regex patterns
-blocklist_regex = [r"^.*\.google\.com$", "novafork.com", "you.com", "huggingface.co"]  # example regex to block all google subdomains
+# Define your blocklist with regex patterns and direct domains
+regex_patterns = [r"^.*\.google\.com$"]  # Regex patterns start with ^
+direct_domains = {"novafork.com", "you.com", "huggingface.co"}  # Direct domain matches
 
 class BlockerResolver:
     def __init__(self, upstream_dns="8.8.8.8", upstream_port=53):
@@ -24,13 +25,20 @@ class BlockerResolver:
         qname = str(request.q.qname).rstrip(".")
         qtype = QTYPE[request.q.qtype]
 
-        # Check if the query matches any blocked patterns
-        for pattern in blocklist_regex:
+        # First check direct domain matches
+        if qname in direct_domains:
+            print(f"Blocked (direct match): {qname}")
+            reply = request.reply()
+            reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
+            return reply
+
+        # Then check regex patterns
+        for pattern in regex_patterns:
             if re.match(pattern, qname):
-                print(f"Blocked: {qname}")
+                print(f"Blocked (regex match): {qname}")
                 reply = request.reply()
                 reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
-                return reply    
+                return reply
 
         # Forward the query to the upstream DNS server
         try:
