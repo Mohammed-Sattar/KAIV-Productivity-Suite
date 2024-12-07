@@ -30,7 +30,7 @@ class BlockerResolver:
         # Check all patterns
         for pattern in self.patterns:
             if re.match(pattern, qname):
-                print(f"Blocked (pattern match): {qname} matched {pattern}")
+                print(f"Blocked: {qname} matched {pattern}")
                 reply = request.reply()
                 reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
                 return reply
