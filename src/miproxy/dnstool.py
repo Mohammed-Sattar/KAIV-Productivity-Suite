@@ -7,31 +7,33 @@ import re
 regex_patterns = [r"^.*\.google\.com$"]  # Regex patterns start with ^
 direct_domains = {"novafork.com", "you.com", "huggingface.co"}  # Direct domain matches
 
+def create_domain_pattern(domain):
+    # Escape dots in domain to prevent regex special character interpretation
+    escaped_domain = domain.replace('.', r'\.')
+    # Create pattern that matches domain and all its subdomains
+    return f"^(.*\.)?{escaped_domain}$"
+
+# Convert direct domains to regex patterns and combine with existing patterns
+all_patterns = regex_patterns + [create_domain_pattern(domain) for domain in direct_domains]
+
 class BlockerResolver:
     def __init__(self, upstream_dns="8.8.8.8", upstream_port=53):
         self.upstream_dns = upstream_dns
         self.upstream_port = upstream_port
+        self.patterns = all_patterns
 
     def resolve(self, request, handler):
         # Parse the request
         qname = str(request.q.qname).rstrip(".")
         qtype = QTYPE[request.q.qtype]
 
-        # First check direct domain matches
-        if qname in direct_domains:
-            print(f"Blocked (direct match): {qname}")
-            reply = request.reply()
-            reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
-            return reply
-
-        # Then check regex patterns
-        for pattern in regex_patterns:
+        # Check all patterns
+        for pattern in self.patterns:
             if re.match(pattern, qname):
-                print(f"Blocked (regex match): {qname}")
+                print(f"Blocked (pattern match): {qname} matched {pattern}")
                 reply = request.reply()
                 reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("0.0.0.0")))
                 return reply
-
         # Forward the query to the upstream DNS server
         try:
             print(f"Forwarding: {qname}")
