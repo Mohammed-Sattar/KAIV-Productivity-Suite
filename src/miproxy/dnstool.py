@@ -1,6 +1,7 @@
 from dnslib import DNSRecord, RR, QTYPE, A
 from dnslib.server import DNSServer
 import socket
+import re
 
 # Define a set of blocked domains
 BLOCKED_DOMAINS = {
@@ -9,6 +10,9 @@ BLOCKED_DOMAINS = {
     "you.com",
     "huggingface.com"
 }
+
+# Define your blocklist with regex patterns
+blocklist_regex = [r"^.*\.google\.com$", r"^.*\.example\.com$"]  # example regex to block all google subdomains
 
 class BlockerResolver:
     def __init__(self, upstream_dns="8.8.8.8", upstream_port=53):
@@ -20,12 +24,14 @@ class BlockerResolver:
         qname = str(request.q.qname).rstrip(".")
         qtype = QTYPE[request.q.qtype]
 
-        # Check if the domain is in the blocklist
-        if qname in BLOCKED_DOMAINS and qtype == "A":
-            print(f"Blocked: {qname}")
-            reply = request.reply()
-            reply.add_answer(RR(qname, QTYPE.A, ttl=60, rdata=A("127.0.0.1")))
-            return reply
+        # Check if the query matches any blocked patterns
+        for pattern in blocklist_regex:
+            if re.match(pattern, qname):
+                print(f"Blocked: {qname}")
+                reply = DNSRecord().add_answer(*request.q.get_q())
+                reply.add_answer((qname, A("0.0.0.0")))  # Block by returning a fake IP
+                handler.send(reply)
+                return
 
         # Forward the query to the upstream DNS server
         try:
