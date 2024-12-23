@@ -36,6 +36,7 @@ class DNSConfigurator:
                 with open('/etc/resolv.conf', 'r') as f:
                     for line in f:
                         if line.startswith('nameserver'):
+                            print(line)
                             return line.split()[1]
             return None
         except Exception as e:
@@ -74,9 +75,15 @@ class DNSConfigurator:
             elif self.system == 'linux':
                 # Use resolvectl if available (modern Linux)
                 try:
-                    subprocess.run(['resolvectl', 'dns', '0', '127.0.0.1'])
+                    print("Using resolvectl")
+                    # subprocess.run(['resolvectl', 'dns', '0', '127.0.0.1'])
+                    # Get the default network interface
+                    interface = subprocess.check_output(['ip', 'route', 'show', 'default']).decode().split()[4]
+                    subprocess.run(['resolvectl', 'dns', interface, '127.0.0.1'])
+                    logging.info("DNS configuration updated successfully for interface: {}".format(interface))
                 except FileNotFoundError:
                     # Fallback to direct resolv.conf modification
+                    print("Using resolv.conf")
                     with open('/etc/resolv.conf', 'w') as f:
                         f.write("nameserver 127.0.0.1\n")
             
@@ -118,7 +125,8 @@ class DNSConfigurator:
                         ])
             elif self.system == 'linux':
                 try:
-                    subprocess.run(['resolvectl', 'dns', '0', self.original_dns])
+                    interface = subprocess.check_output(['ip', 'route', 'show', 'default']).decode().split()[4]
+                    subprocess.run(['resolvectl', 'dns', interface, '127.0.0.1'])
                 except FileNotFoundError:
                     with open('/etc/resolv.conf', 'w') as f:
                         f.write(f"nameserver {self.original_dns}\n")
@@ -140,7 +148,7 @@ class BlockerResolver:
         # Escape dots in domain to prevent regex special character interpretation
         escaped_domain = domain.replace('.', r'\.')
         # Create pattern that matches domain and all its subdomains
-        return f"^(.*\.)?{escaped_domain}$"
+        return f"^(.*\\.)?{escaped_domain}$"
 
     def resolve(self, request, handler):
         # Parse the request
