@@ -155,7 +155,7 @@ We welcome contributions! If you'd like to add features, fix bugs, or improve do
 ---
 
 ## **License**
-This project is licensed under the MIT License. See `LICENSE` for more details.
+This project is licensed under the [CC BY-NC](https://creativecommons.org/licenses/by-nc/4.0/) License. See `LICENSE` for more details.
 
 ---
 
