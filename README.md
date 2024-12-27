@@ -8,14 +8,14 @@ KAIV (Keep AI Versatile) is a full-featured productivity application designed to
 1. [Introduction](#introduction)
 2. [Features](#features)
    - [Website and App Blocker](#website-and-app-blocker)
-   - [AI Productivity Chatbot](#ai-productivity-chatbot)
    - [Clock Suite](#clock-suite)
-   - [AI Therapist](#ai-therapist)
-   - [Note Taker](#note-taker)
-   - [Reminders](#reminders)
-   - [Accountability Partner](#accountability-partner)
-   - [Calendar Integration](#calendar-integration)
    - [Statistics and Analytics](#statistics-and-analytics)
+   - [Note Taker](#note-taker)
+   - [AI Productivity Chatbot](#ai-productivity-chatbot)
+   - [Accountability Partner](#accountability-partner)
+   - [AI Therapist](#ai-therapist)
+   - [Calendar Integration](#calendar-integration)
+   - [Reminders](#reminders)
    - [Flash Cards](#flash-cards)
 3. [Technical Stack](#technical-stack)
 4. [Installation](#installation)
@@ -42,15 +42,7 @@ KAIV is more than just a productivity app; it's a comprehensive suite that combi
 
 ---
 
-### **2. AI Productivity Chatbot**
-- An intelligent chatbot designed to guide your productivity.
-- Offers task prioritization advice, goal tracking, and motivation.
-- Suggests productivity techniques like Pomodoro, time-blocking, etc.
-- Provides summaries for tasks or workflows to help with decision-making.
-
----
-
-### **3. Clock Suite**
+### **2. Clock Suite**
 A comprehensive time management toolkit, including:
 - **World Clock:** Display time zones for global collaborations.
 - **Alarms:** Set reminders for important activities.
@@ -59,15 +51,14 @@ A comprehensive time management toolkit, including:
 
 ---
 
-### **4. AI Therapist**
-- A supportive, conversational therapist powered by AI.
-- Helps users manage stress, anxiety, or mental fatigue.
-- Provides personalized advice and coping mechanisms.
-- Tracks mood over time to help identify patterns.
+### **3. Statistics and Analytics**
+- Track your productivity trends over time.
+- Generate reports on focus time, distractions blocked, and task completion.
+- Visualize your progress with intuitive charts and graphs.
 
 ---
 
-### **5. Note Taker**
+### **4. Note Taker**
 - Take notes quickly and organize them efficiently.
 - Categorize notes (e.g., Work, Study, Ideas, Personal).
 - Support for rich text, images, and to-do lists.
@@ -75,17 +66,26 @@ A comprehensive time management toolkit, including:
 
 ---
 
-### **6. Reminders**
-- Set personalized reminders for tasks, deadlines, and events.
-- Integrates seamlessly with your calendar for scheduling.
-- **Recurring Reminders:** Daily, weekly, or monthly events.
+### **5. AI Productivity Chatbot**
+- An intelligent chatbot designed to guide your productivity.
+- Offers task prioritization advice, goal tracking, and motivation.
+- Suggests productivity techniques like Pomodoro, time-blocking, etc.
+- Provides summaries for tasks or workflows to help with decision-making.
 
 ---
 
-### **7. Accountability Partner**
+### **6. Accountability Partner**
 - Collaborate with real partners or an AI accountability buddy.
 - Helps you stay responsible for your goals and tasks.
 - Share progress reports and receive reminders from your partner.
+
+---
+
+### **7. AI Therapist**
+- A supportive, conversational therapist powered by AI.
+- Helps users manage stress, anxiety, or mental fatigue.
+- Provides personalized advice and coping mechanisms.
+- Tracks mood over time to help identify patterns.
 
 ---
 
@@ -96,10 +96,10 @@ A comprehensive time management toolkit, including:
 
 ---
 
-### **9. Statistics and Analytics**
-- Track your productivity trends over time.
-- Generate reports on focus time, distractions blocked, and task completion.
-- Visualize your progress with intuitive charts and graphs.
+### **9. Reminders**
+- Set personalized reminders for tasks, deadlines, and events.
+- Integrates seamlessly with your calendar for scheduling.
+- **Recurring Reminders:** Daily, weekly, or monthly events.
 
 ---
 
