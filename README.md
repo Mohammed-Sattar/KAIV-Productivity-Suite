@@ -161,5 +161,9 @@ This project is licensed under the [CC BY-NC](https://creativecommons.org/licens
 
 ## **Screenshots**
 
-Sample Interface:  
+Sample Interfaces:  
 ![KAIV Home Interface](kaiv_interface.png)
+
+![KAIV Sample Interface](kaiv_interface2.png)
+
+
